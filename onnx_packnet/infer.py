@@ -149,7 +149,7 @@ class TensorRTInfer:
 
 def main(args):
     trt_infer = TensorRTInfer(args.engine)
-    batcher = ImageBatcher(args.input, *trt_infer.input_spec(), preprocessor=args.preprocessor)
+    batcher = ImageBatcher(args.input, *trt_infer.input_spec())
     # TODO(ia): now the code below will work only with batch size of 1
     i = 0
     for batch, images in batcher.get_batch():
@@ -171,12 +171,6 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--engine", help="The TensorRT engine to infer with")
     parser.add_argument("-i", "--input",
                         help="The input to infer, either a single image path, or a directory of images")
-    parser.add_argument("-t", "--top", default=1, type=int,
-                        help="The amount of top classes and scores to output per image, default: 1")
-    parser.add_argument("-s", "--separator", default="\t",
-                        help="Separator to use between columns when printing the results, default: \\t")
-    parser.add_argument("-p", "--preprocessor", default="V2", choices=["V1", "V1MS", "V2"],
-                        help="Select the image preprocessor to use, either 'V2', 'V1' or 'V1MS', default: V2")
     args = parser.parse_args()
     if not all([args.engine, args.input]):
         parser.print_help()

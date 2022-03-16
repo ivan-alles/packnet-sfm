@@ -26,7 +26,7 @@ class ImageBatcher:
     Creates batches of pre-processed images.
     """
 
-    def __init__(self, input, shape, dtype, max_num_images=None, exact_batches=False, preprocessor="V2"):
+    def __init__(self, input, shape, dtype, max_num_images=None, exact_batches=False):
         """
         :param input: The input directory to read images from.
         :param shape: The tensor shape of the batch to prepare, either in NCHW or NHWC format.
@@ -98,7 +98,6 @@ class ImageBatcher:
         self.image_index = 0
         self.batch_index = 0
 
-        self.preprocessor = preprocessor
 
     def preprocess_image(self, image_path):
         """
@@ -111,49 +110,9 @@ class ImageBatcher:
         :return: A numpy array holding the image sample, ready to be contacatenated into the rest of the batch.
         """
 
-        def pad_crop(image):
-            """
-            A subroutine to implement padded cropping. This will create a center crop of the image, padded by 32 pixels.
-            :param image: The PIL image object
-            :return: The PIL image object already padded and cropped.
-            """
-            # Assume square images
-            assert self.height == self.width
-            width, height = image.size
-            ratio = self.height / (self.height + 32)
-            crop_size = int(ratio * min(height, width))
-            y = (height - crop_size) // 2
-            x = (width - crop_size) // 2
-            return image.crop((x, y, x + crop_size, y + crop_size))
-
         image = Image.open(image_path)
         image = image.convert(mode='RGB')
-        if self.preprocessor == "V2":
-            # For EfficientNet V2: Bilinear Resize and [-1,+1] Normalization
-            if self.height < 320:
-                # Padded crop only on smaller sizes
-                image = pad_crop(image)
-            image = image.resize((self.width, self.height), resample=Image.BILINEAR)
-            image = np.asarray(image, dtype=self.dtype)
-            image = (image - 128.0) / 128.0
-        elif self.preprocessor == "V1":
-            # For EfficientNet V1: Padded Crop, Bicubic Resize, and [0,1] Normalization
-            # (Mean subtraction and Std Dev scaling will be part of the graph, so not done here)
-            image = pad_crop(image)
-            image = image.resize((self.width, self.height), resample=Image.BICUBIC)
-            image = np.asarray(image, dtype=self.dtype)
-            image = image / 255.0
-        elif self.preprocessor == "V1MS":
-            # For EfficientNet V1: Padded Crop, Bicubic Resize, and [0,1] Normalization
-            # Mean subtraction and Std dev scaling are applied as a pre-processing step outside the graph.
-            image = pad_crop(image)
-            image = image.resize((self.width, self.height), resample=Image.BICUBIC)
-            image = np.asarray(image, dtype=self.dtype)
-            image = image - np.asarray([123.68, 116.28, 103.53])
-            image = image / np.asarray([58.395, 57.120, 57.375])
-        else:
-            print("Preprocessing method {} not supported".format(self.preprocessor))
-            sys.exit(1)
+        image = np.array(image) / 255
         if self.format == "NCHW":
             image = np.transpose(image, (2, 0, 1))
         return image
