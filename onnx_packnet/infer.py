@@ -20,12 +20,45 @@ import argparse
 
 import numpy as np
 import tensorrt as trt
+import cv2
 
 import pycuda.driver as cuda
 import pycuda.autoinit
 
 from image_batcher import ImageBatcher
+from matplotlib.cm import get_cmap
 
+
+def viz_inv_depth(inv_depth, normalizer=None, percentile=95,
+                  colormap='plasma', filter_zeros=False):
+    """
+    Converts an inverse depth map to a colormap for visualization.
+
+    Parameters
+    ----------
+    inv_depth : torch.Tensor [B,1,H,W]
+        Inverse depth map to be converted
+    normalizer : float
+        Value for inverse depth map normalization
+    percentile : float
+        Percentile value for automatic normalization
+    colormap : str
+        Colormap to be used
+    filter_zeros : bool
+        If True, do not consider zero values during normalization
+
+    Returns
+    -------
+    colormap : np.array [H,W,3]
+        Colormap generated from the inverse depth map
+    """
+    # If a tensor is provided, convert to numpy
+    cm = get_cmap(colormap)
+    if normalizer is None:
+        normalizer = np.percentile(
+            inv_depth[inv_depth > 0] if filter_zeros else inv_depth, percentile)
+    inv_depth /= (normalizer + 1e-6)
+    return cm(np.clip(inv_depth, 0., 1.0))[:, :, :3]
 
 class TensorRTInfer:
     """
@@ -111,32 +144,26 @@ class TensorRTInfer:
         self.context.execute_v2(self.allocations)
         cuda.memcpy_dtoh(output, self.outputs[0]['allocation'])
 
-        # Process the results
-        classes = np.argmax(output, axis=1)
-        scores = np.max(output, axis=1)
-        top = min(top, output.shape[1])
-        top_classes = np.flip(np.argsort(output, axis=1), axis=1)[:, 0:top]
-        top_scores = np.flip(np.sort(output, axis=1), axis=1)[:, 0:top]
-
-        return classes, scores, [top_classes, top_scores]
+        return output
 
 
 def main(args):
     trt_infer = TensorRTInfer(args.engine)
     batcher = ImageBatcher(args.input, *trt_infer.input_spec(), preprocessor=args.preprocessor)
+    # TODO(ia): now the code below will work only with batch size of 1
+    i = 0
     for batch, images in batcher.get_batch():
-        classes, scores, top = trt_infer.infer(batch)
-        for i in range(len(images)):
-            if args.top == 1:
-                print(images[i], classes[i], scores[i], sep=args.separator)
-            else:
-                line = [images[i]]
-                assert args.top <= top[0].shape[1]
-                for t in range(args.top):
-                    line.append(str(top[0][i][t]))
-                for t in range(args.top):
-                    line.append(str(top[1][i][t]))
-                print(args.separator.join(line))
+        output = trt_infer.infer(batch)
+
+        # Prepare RGB image
+        rgb = np.moveaxis(batch[0], 0, -1) * 255
+        # Prepare inverse depth
+        viz_pred_inv_depth = viz_inv_depth(output[0, 0]) * 255
+        # Concatenate both vertically
+        image = np.concatenate([rgb, viz_pred_inv_depth], 0)
+        # Save visualization
+        cv2.imwrite(f'output/trt-{i}.png', image[:, :, ::-1])
+        i += 1
 
 
 if __name__ == "__main__":
