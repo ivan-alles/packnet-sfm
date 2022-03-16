@@ -3,10 +3,14 @@
 import argparse
 import numpy as np
 import os
+import sys
 import torch
 
 from glob import glob
 from cv2 import imwrite
+
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from packnet_sfm.models.model_wrapper import ModelWrapper
 from packnet_sfm.datasets.augmentations import resize_image, to_tensor
