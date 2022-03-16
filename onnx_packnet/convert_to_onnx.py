@@ -25,6 +25,9 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from packnet_sfm.networks.depth.PackNet01 import PackNet01
+from packnet_sfm.utils.config import parse_test_file
+from packnet_sfm.models.model_wrapper import ModelWrapper
+
 
 
 def post_process_packnet(model_file, opset=11):
@@ -59,10 +62,16 @@ def build_packnet(model_file, args):
     """
     Construct the packnet network and export it to ONNX
     """
-    input_pyt = torch.randn((1, 3, 192, 640), requires_grad=False)
+    input_pyt = torch.randn((1, 3, 384, 640), requires_grad=False)
 
-    # Build the model
-    model_pyt = PackNet01(version='1A')
+    if args.checkpoint:
+        config, state_dict = parse_test_file(args.checkpoint)
+        model_wrapper = ModelWrapper(config, load_datasets=False)
+        # Restore monodepth_model state
+        model_wrapper.load_state_dict(state_dict)
+        model_pyt = model_wrapper.model.depth_net
+    else:
+        model_pyt = PackNet01(version='1A')
 
     # Convert the model into ONNX
     torch.onnx.export(model_pyt, input_pyt, model_file, verbose=args.verbose, opset_version=args.opset)
@@ -73,6 +82,8 @@ def main():
     parser.add_argument("-o", "--output", help="Path to save the generated ONNX model", default="model.onnx")
     parser.add_argument("-op", "--opset", type=int, help="ONNX opset to use", default=11)
     parser.add_argument("-v", "--verbose", action='store_true', help="Flag to enable verbose logging for torch.onnx.export")
+    parser.add_argument('--checkpoint', type=str, default='', help='Checkpoint (.ckpt)')
+
     args=parser.parse_args()
 
     # Construct the packnet graph and generate the onnx graph
