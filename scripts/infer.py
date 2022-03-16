@@ -5,6 +5,7 @@ import numpy as np
 import os
 import sys
 import torch
+import time
 
 from glob import glob
 from cv2 import imwrite
@@ -32,6 +33,8 @@ def parse_args():
     parser.add_argument('--checkpoint', type=str, help='Checkpoint (.ckpt)')
     parser.add_argument('--input', type=str, help='Input file or folder')
     parser.add_argument('--output', type=str, help='Output file or folder')
+    parser.add_argument('--warmups', type=int, default=10, help='Number of warm-up inferences')
+    parser.add_argument('--repeats', type=int, default=10, help='Number of performance-measurement inferences')
     parser.add_argument('--image_shape', type=int, nargs='+', default=None,
                         help='Input and output image shape '
                              '(default: checkpoint\'s config.datasets.augmentation.image_shape)')
@@ -85,10 +88,21 @@ def infer_and_save_depth(input_file, output_file, model_wrapper, image_shape, ha
 
     # Send image to GPU if available
     if torch.cuda.is_available():
+        print('Compute on CUDA')
         image = image.to('cuda:{}'.format(rank()), dtype=dtype)
+    else:
+        print('Compute on CPU')
 
-    # Depth inference (returns predicted inverse depth)
-    pred_inv_depth = model_wrapper.depth(image)[0]
+    for i in range(args.warmups):
+        pred_inv_depth = model_wrapper.depth(image)[0]
+
+    start_time = time.perf_counter_ns()
+    for i in range(args.repeats):
+        pred_inv_depth = model_wrapper.depth(image)[0]
+
+    run_time_torch = (time.perf_counter_ns() - start_time) / args.repeats
+
+    print(f'Runtime torch {run_time_torch / 1e6:.3f} ms')
 
     if save == 'npz' or save == 'png':
         # Get depth from predicted depth map and save to different formats
