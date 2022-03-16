@@ -17,6 +17,7 @@
 import os
 import sys
 import argparse
+import time
 
 import numpy as np
 import tensorrt as trt
@@ -112,6 +113,9 @@ class TensorRTInfer:
         assert len(self.outputs) > 0
         assert len(self.allocations) > 0
 
+        # Prepare the output data
+        self.output = np.zeros(*self.output_spec())
+
     def input_spec(self):
         """
         Get the specs for the input tensor of the network. Useful to prepare memory allocations.
@@ -136,24 +140,25 @@ class TensorRTInfer:
         :return: Three items, as numpy arrays for each batch image: The maximum score class, the corresponding maximum
         score, and a list of the top N classes and scores.
         """
-        # Prepare the output data
-        output = np.zeros(*self.output_spec())
 
         # Process I/O and execute the network
         cuda.memcpy_htod(self.inputs[0]['allocation'], np.ascontiguousarray(batch))
         self.context.execute_v2(self.allocations)
-        cuda.memcpy_dtoh(output, self.outputs[0]['allocation'])
+        cuda.memcpy_dtoh(self.output, self.outputs[0]['allocation'])
 
-        return output
+        return self.output
 
 
 def main(args):
     trt_infer = TensorRTInfer(args.engine)
     batcher = ImageBatcher(args.input, *trt_infer.input_spec())
+
     # TODO(ia): now the code below will work only with batch size of 1
     i = 0
     for batch, images in batcher.get_batch():
+        start_time = time.perf_counter_ns()
         output = trt_infer.infer(batch)
+        run_time_torch = (time.perf_counter_ns() - start_time) / args.repeats
 
         # Prepare RGB image
         rgb = np.moveaxis(batch[0], 0, -1) * 255
@@ -165,12 +170,30 @@ def main(args):
         cv2.imwrite(f'output/trt-{i}.png', image[:, :, ::-1])
         i += 1
 
+    for i in range(args.warmups):
+        for batch, images in batcher.get_batch():
+            output = trt_infer.infer(batch)
+
+    run_time_trt = 0
+    repeats = 0
+    for i in range(args.repeats):
+        start_time = time.perf_counter_ns()
+        output = trt_infer.infer(batch)
+        run_time_trt += (time.perf_counter_ns() - start_time)
+        repeats += batch.shape[0]
+
+    run_time_trt /= repeats
+    print(f'Runtime trt {run_time_trt / 1e6:.3f} ms')
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--engine", help="The TensorRT engine to infer with")
     parser.add_argument("-i", "--input",
                         help="The input to infer, either a single image path, or a directory of images")
+    parser.add_argument('--warmups', type=int, default=10, help='Number of warm-up inferences')
+    parser.add_argument('--repeats', type=int, default=10, help='Number of performance-measurement inferences')
     args = parser.parse_args()
     if not all([args.engine, args.input]):
         parser.print_help()
