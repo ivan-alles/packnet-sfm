@@ -29,7 +29,6 @@ from packnet_sfm.utils.config import parse_test_file
 from packnet_sfm.models.model_wrapper import ModelWrapper
 
 
-
 def post_process_packnet(model_file, opset=11):
     """
     Use ONNX graph surgeon to replace upsample and instance normalization nodes. Refer to post_processing.py for details.
@@ -55,10 +54,10 @@ def post_process_packnet(model_file, opset=11):
     # Export the onnx graph from graphsurgeon
     onnx.save_model(gs.export_onnx(graph), model_file)
 
-    print("Saving the ONNX model to {}".format(model_file))
+    print(f'Saving the ONNX model to {model_file}')
 
 
-def build_packnet(model_file, args):
+def export_to_onnx(model_file, args):
     """
     Construct the packnet network and export it to ONNX
     """
@@ -84,10 +83,11 @@ def main():
     parser.add_argument("-v", "--verbose", action='store_true', help="Flag to enable verbose logging for torch.onnx.export")
     parser.add_argument('--checkpoint', type=str, default='', help='Checkpoint (.ckpt)')
 
-    args=parser.parse_args()
+    args = parser.parse_args()
 
-    # Construct the packnet graph and generate the onnx graph
-    build_packnet(args.output, args)
+    export_to_onnx(args.output, args)
+
+    onnx.checker.check_model(args.output)
 
     # Perform post processing on Instance Normalization and upsampling nodes and create a new ONNX graph
     post_process_packnet(args.output, args.opset)
