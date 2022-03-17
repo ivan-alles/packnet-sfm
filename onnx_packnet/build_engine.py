@@ -7,7 +7,7 @@ import common
 import logging
 
 
-TRT_LOGGER = trt.Logger(trt.Logger.VERBOSE)
+TRT_LOGGER = trt.Logger(trt.Logger.INFO)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("EngineBuilder")
@@ -28,7 +28,7 @@ def build_engine(onnx_file):
             for error in range(parser.num_errors):
                 print (parser.get_error(error))
             return None
-    return builder.build_engine(network, config)
+    return builder.build_serialized_network(network, config)
 
 
 if __name__ == "__main__":
@@ -36,10 +36,10 @@ if __name__ == "__main__":
     parser.add_argument("--model", required=True, type=str, help="ONNX model file")
     parser.add_argument("--engine", required=True, type=str, help="The file to save engine to")
     args = parser.parse_args()
-    engine = build_engine(args.model)
+    serialized_engine = build_engine(args.model)
 
     logger.info("Serializing engine to file: {:}".format(args.engine))
     with open(args.engine, "wb") as f:
-        f.write(engine.serialize())
+        f.write(serialized_engine)
 
 
