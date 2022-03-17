@@ -38,7 +38,7 @@ def post_process_packnet(model_file, opset=11):
     # Load the packnet graph
     graph = gs.import_onnx(onnx.load(model_file))
 
-    if opset>=11:
+    if opset >= 11:
         graph = process_pad_nodes(graph)
 
     # Replace the subgraph of upsample with a single node with input and scale factor.
