@@ -160,14 +160,14 @@ def main(args):
         output = trt_infer.infer(batch)
         run_time_torch = (time.perf_counter_ns() - start_time) / args.repeats
 
-        # Prepare RGB image
-        rgb = np.moveaxis(batch[0], 0, -1) * 255
-        # Prepare inverse depth
-        viz_pred_inv_depth = viz_inv_depth(output[0, 0]) * 255
-        # Concatenate both vertically
-        image = np.concatenate([rgb, viz_pred_inv_depth], 0)
-        # Save visualization
-        cv2.imwrite(f'output/trt-{i}.png', image[:, :, ::-1])
+        if True:
+            image = viz_inv_depth(output[0, 0]) * 255
+            cv2.imwrite(f'output/trt-{i}.png', image[:, :, ::-1])
+        else:
+            rgb = np.moveaxis(batch[0], 0, -1) * 255
+            viz_pred_inv_depth = viz_inv_depth(output[0, 0]) * 255
+            image = np.concatenate([rgb, viz_pred_inv_depth], 0)
+            cv2.imwrite(f'output/trt-{i}.png', image[:, :, ::-1])
         i += 1
 
     for i in range(args.warmups):

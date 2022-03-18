@@ -112,17 +112,21 @@ def infer_and_save_depth(input_file, output_file, model_wrapper, image_shape, ha
             pcolor(filename, 'magenta', attrs=['bold'])))
         write_depth(filename, depth=inv2depth(pred_inv_depth))
     else:
-        # Prepare RGB image
-        rgb = image[0].permute(1, 2, 0).detach().cpu().numpy() * 255
-        # Prepare inverse depth
-        viz_pred_inv_depth = viz_inv_depth(pred_inv_depth[0]) * 255
-        # Concatenate both vertically
-        image = np.concatenate([rgb, viz_pred_inv_depth], 0)
-        # Save visualization
-        print('Saving {} to {}'.format(
-            pcolor(input_file, 'cyan', attrs=['bold']),
-            pcolor(output_file, 'magenta', attrs=['bold'])))
-        imwrite(output_file, image[:, :, ::-1])
+        if True:
+            # Save output only
+            image = viz_inv_depth(pred_inv_depth[0]) * 255
+            print(f'Saving {input_file} to {output_file}')
+            imwrite(output_file, image[:, :, ::-1])
+        else:
+            # Prepare RGB image
+            rgb = image[0].permute(1, 2, 0).detach().cpu().numpy() * 255
+            # Prepare inverse depth
+            viz_pred_inv_depth = viz_inv_depth(pred_inv_depth[0]) * 255
+            # Concatenate both vertically
+            image = np.concatenate([rgb, viz_pred_inv_depth], 0)
+            # Save visualization
+            print(f'Saving {input_file} to {output_file}')
+            imwrite(output_file, image[:, :, ::-1])
 
 
 def main(args):
